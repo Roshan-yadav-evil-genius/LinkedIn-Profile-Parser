@@ -5,25 +5,22 @@ import re
 
 def is_experience_duration(line):
     return bool(
-        re.fullmatch(r"\d+\syear[s]?( \d+\smonth[s]?)?|\d+\smonth[s]?", line.strip())
+        re.search(r"\d+\syear[s]?( \d+\smonth[s]?)?|\d+\smonth[s]?", line)
     )
-
-def parse_experience_duration(line):
-    match = re.fullmatch(
-        r"(?P<years>\d+)\syear[s]?( (?P<months>\d+)\smonth[s]?)?|(?P<only_months>\d+)\smonth[s]?",
-        line.strip()
-    )
-    if match:
-        return match.groupdict()
-    return ""
 
 def get_experience_duration_string(line):
     match = re.search(
-        r"\d+\syear[s]?( \d+\smonth[s]?)?|\d+\smonth[s]?", line.strip()
+        r"\d+\syear[s]?( \d+\smonth[s]?)?|\d+\smonth[s]?", line
     )
-    if match:
-        return match.group(0)
-    return ""
+    return match.group(0) if match else ""
+
+def parse_experience_duration(line):
+    match = re.search(
+        r"(?P<years>\d+)\syear[s]?( (?P<months>\d+)\smonth[s]?)?|(?P<only_months>\d+)\smonth[s]?",
+        line
+    )
+    return match.groupdict() if match else ""
+
 
 
 
@@ -61,17 +58,14 @@ def get_experience_timeline_string(line):
 # --------------------------------------------- Education timeline ---------------------------------------------
 
 
-def is_education_timeline(text):
-    return bool(re.search(r"\(\s*.*?\d{4}.*?\)", text) )
 
+def is_education_timeline(text):
+    return bool(re.search(r"\((?:[A-Za-z]+\s)?\d{4}\s*-\s*(?:[A-Za-z]+\s)?\d{4}\)", text))
 
 def parse_education_timeline(text):
-    match = re.search(
-        r"(?P<from>[A-Za-z]+\s\d{4})\s*-\s*(?P<to>[A-Za-z]+\s\d{4})", text
-    )
+    match = re.search(r"(?P<from>(?:[A-Za-z]+\s)?\d{4})\s*-\s*(?P<to>(?:[A-Za-z]+\s)?\d{4})", text)
     return match.groupdict() if match else ""
 
-
 def get_education_timeline_string(text):
-    match = re.search(r"\(\s*.*?\d{4}.*?\)", text)
-    return match.group(0) if match else ""
+    matches = re.findall(r"\((?:[A-Za-z]+\s)?\d{4}\s*-\s*(?:[A-Za-z]+\s)?\d{4}\)", text)
+    return matches[-1] if matches else ""

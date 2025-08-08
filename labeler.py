@@ -1,5 +1,5 @@
 from spacy.tokens import Span
-from typing import List
+from typing import List, Dict
 from utils._regex import (
     get_education_timeline_string,
     is_education_timeline,
@@ -310,18 +310,21 @@ def label_experience_jobroles(spans: List[Span]) -> List[Span]:
 
 def label_experience_organizations(spans: List[Span]) -> List[Span]:
     updated_spans: List[Span] = []
-    present_experience=True
-    a=0
+    present_experience = True
+    a = 0
     for i, span in enumerate(spans):
-        if span._.linkedin_category == "experience":
-            a+=1
+        if (
+            span._.linkedin_category == "experience"
+            and linkedin_header_to_category_value(span.text) != "experience"
+        ):
+            a += 1
             if (
                 span._.linkedin_label in (LinkedInLabels.DURATION.value, "jobrole")
                 and updated_spans[-1]._.linkedin_label == "section_header"
             ):
                 updated_spans[-1]._.linkedin_label = "organization"
-            
-            if present_experience and a==2:
+
+            if present_experience and a == 2:
                 span._.linkedin_label = "organization"
 
         updated_spans.append(span)
@@ -345,5 +348,109 @@ def label_education_organizations(spans: List[Span], nlp: Language) -> List[Span
         updated_spans.append(span)
     return updated_spans
 
-def get_type_by_category():
-    pass
+
+def get_dict_output(spans: List[Span]) -> Dict:
+    output = dict()
+    first_userinfo = True
+    temp_organization = str()
+    temp_jobrole = str()
+    for span in spans:
+        if (
+            span._.linkedin_label == "section_header"
+            and span._.linkedin_category == linkedin_header_to_category_value(span.text)
+        ):
+            # Skip headings
+            continue
+
+        if span._.linkedin_category == LinkedInCategory.TOPSKILLS.value:
+            output.setdefault(LinkedInCategory.TOPSKILLS.value, [])
+            output[LinkedInCategory.TOPSKILLS.value].append(span.text)  # Skills
+
+        elif span._.linkedin_category == LinkedInCategory.LANGUAGES.value:
+            output.setdefault(LinkedInCategory.LANGUAGES.value, [])
+            output[LinkedInCategory.LANGUAGES.value].append(span.text)  # Languages
+
+        elif span._.linkedin_category == LinkedInCategory.CERTIFICATIONS.value:
+            output.setdefault(LinkedInCategory.CERTIFICATIONS.value, [])
+            output[LinkedInCategory.CERTIFICATIONS.value].append(span.text)  # Languages
+
+        elif span._.linkedin_category == LinkedInCategory.HONORSAWARDS.value:
+            output.setdefault(LinkedInCategory.HONORSAWARDS.value, [])
+            output[LinkedInCategory.HONORSAWARDS.value].append(span.text)  # Languages
+
+        elif span._.linkedin_category in [
+            LinkedInCategory.CONTACT.value,
+            LinkedInCategory.USERINFO.value,
+        ]:
+            if span._.linkedin_label in [
+                LinkedInLabels.JOBROLE.value,
+                LinkedInLabels.LOCATION.value,
+                LinkedInLabels.NAME.value,
+            ]:
+                output[LinkedInCategory.USERINFO.value][
+                    span._.linkedin_label
+                ] = span.text
+            else:
+                output.setdefault(LinkedInCategory.USERINFO.value, {"others": []})
+                output[LinkedInCategory.USERINFO.value]["others"].append(span.text)
+
+        elif span._.linkedin_category == LinkedInCategory.SUMMARY.value:
+            output.setdefault(LinkedInCategory.SUMMARY.value, "")
+            output[LinkedInCategory.SUMMARY.value] += span.text  # Summary
+
+        elif span._.linkedin_category == LinkedInCategory.EXPERIENCE.value:
+            output.setdefault(LinkedInCategory.EXPERIENCE.value, {})
+
+            if span._.linkedin_label == LinkedInLabels.ORGANIZATION.value:
+                temp_organization = span.text
+                temp_jobrole = ""
+                output[LinkedInCategory.EXPERIENCE.value][temp_organization] = dict(
+                    duration=str()
+                )
+            elif span._.linkedin_label == LinkedInLabels.DURATION.value:
+                output[LinkedInCategory.EXPERIENCE.value][temp_organization][
+                    "duration"
+                ] = span.text
+            elif span._.linkedin_label == LinkedInLabels.JOBROLE.value:
+                temp_jobrole = span.text
+                output.setdefault(LinkedInCategory.EXPERIENCE.value, {}).setdefault(temp_organization, {})[temp_jobrole] = {"desc": ""}
+
+            elif span._.linkedin_label in [
+                LinkedInLabels.TIMELINE.value,
+                LinkedInLabels.LOCATION.value,
+            ]:
+                output.setdefault(LinkedInCategory.EXPERIENCE.value, {}).setdefault(temp_organization, {}).setdefault(temp_jobrole, {})[span._.linkedin_label] = span.text
+
+            else:
+                output.setdefault(LinkedInCategory.EXPERIENCE.value, {}) \
+                    .setdefault(temp_organization, {}) \
+                    .setdefault(temp_jobrole, {}) \
+                    .setdefault("desc", "")
+                output[LinkedInCategory.EXPERIENCE.value][temp_organization][temp_jobrole]["desc"] += span.text + "\n"
+
+
+        elif span._.linkedin_category == LinkedInCategory.EDUCATION.value:
+            # -----------------Education Parsing-----------------
+            
+            if LinkedInCategory.EDUCATION.value not in output:
+                temp_organization = str()
+                temp_jobrole = str()
+
+            output.setdefault(LinkedInCategory.EDUCATION.value, {})
+
+            if span._.linkedin_label == LinkedInLabels.ORGANIZATION.value:
+                temp_organization = span.text
+                output[LinkedInCategory.EDUCATION.value][span.text] = dict()
+
+            elif span._.linkedin_label == LinkedInLabels.EDUCATION.value:
+                output.setdefault(LinkedInCategory.EDUCATION.value, {}).setdefault(temp_organization, {})
+                output[LinkedInCategory.EDUCATION.value][temp_organization][
+                    LinkedInLabels.EDUCATION.value
+                ] = span.text
+
+            elif span._.linkedin_label == LinkedInLabels.TIMELINE.value:
+                output[LinkedInCategory.EDUCATION.value][temp_organization][
+                    LinkedInLabels.TIMELINE.value
+                ] = span.text
+
+    return output
